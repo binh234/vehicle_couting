@@ -3,6 +3,7 @@ from queue import Queue
 
 
 class Buffer(object):
+    i = 1
     def __init__(self, size):
         # Save buffer size
         self.bufferSize = size
@@ -60,14 +61,19 @@ class Buffer(object):
         self.clearBuffer_get.acquire()
         self.usedSlots.acquire()
         # Take item from queue
-        self.queueProtect.lock()
-        data = self.queue.get()
-        self.queueProtect.unlock()
+        if self.queue.qsize() > 0:
+            data = self.queue.get(True, 0.1)
+        else:
+            data = None
         # Release semaphores
         self.freeSlots.release()
         self.clearBuffer_get.release()
         # Return item to caller
         return data
+    
+    def release(self):
+        self.freeSlots.release()
+        self.usedSlots.release()
 
     def clear(self):
         # Check if buffer contains items

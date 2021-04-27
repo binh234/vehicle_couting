@@ -6,6 +6,7 @@ import cv2
 from MatToQImage import matToQImage
 from Structures import *
 from Config import *
+from VehicleCounting import VehicleCounting
 
 
 class ProcessingThread(QThread):
@@ -33,10 +34,12 @@ class ProcessingThread(QThread):
         self.imgProcFlags = ImageProcessingFlags()
         self.imgProcSettings = ImageProcessingSettings()
         self.statsData = ThreadStatisticsData()
+        self.vehicleCounting = VehicleCounting()
         self.frame = None
         self.currentFrame = None
 
     def run(self):
+        i = 1
         while True:
             ##############################
             # Stop thread if doStop=True #
@@ -54,14 +57,25 @@ class ProcessingThread(QThread):
             self.processingTime = self.t.elapsed()
             # Start timer (used to calculate processing rate)
             self.t.start()
-
             with QMutexLocker(self.processingMutex):
                 # Get frame from queue, store in currentFrame, set ROI
                 # self.currentFrame = Mat(self.sharedImageBuffer.getByDeviceUrl(self.deviceUrl).get().clone(),
                 #                         self.currentROI)
-                self.currentFrame = self.sharedImageBuffer.getByDeviceUrl(self.deviceUrl).get()[
+                # print(type(self.sharedImageBuffer.getByDeviceUrl(self.deviceUrl)))
+                self.currentFrame = self.sharedImageBuffer.getByDeviceUrl(self.deviceUrl).get()
+
+                if self.currentFrame is not None:
+                    # Yolo detection:
+                    if self.imgProcFlags.yoloOn:
+                        self.currentFrame = self.vehicleCounting.count_vehicles(self.currentFrame)
+                        # self.currentFrame = cv2.line(self.currentFrame, (0, 300), (400, 300), (255, 0, 0), 2)
+                    
+                    self.currentFrame = self.currentFrame[
                                     self.currentROI.y():(self.currentROI.y() + self.currentROI.height()),
                                     self.currentROI.x():(self.currentROI.x() + self.currentROI.width())].copy()
+                else:
+                    continue
+
 
                 # Example of how to grab a frame from another stream (where Device Url=1)
                 # Note: This requires stream synchronization to be ENABLED (in the Options menu of MainWindow)
@@ -110,6 +124,7 @@ class ProcessingThread(QThread):
                 # Flip
                 if self.imgProcFlags.flipOn:
                     self.currentFrame = cv2.flip(self.currentFrame, self.imgProcSettings.flipCode)
+
                 # Canny edge detection
                 if self.imgProcFlags.cannyOn:
                     self.currentFrame = cv2.Canny(self.currentFrame,
@@ -127,6 +142,7 @@ class ProcessingThread(QThread):
 
                 # Inform GUI thread of new frame (QImage)
                 self.newFrame.emit(self.frame)
+                # self.sharedImageBuffer.getByDeviceUrl(self.deviceUrl).queue.task_done()
 
             # Update statistics
             self.updateFPS(self.processingTime)
@@ -164,6 +180,7 @@ class ProcessingThread(QThread):
             self.sampleNumber = 0
 
     def stop(self):
+        self.sharedImageBuffer.getByDeviceUrl(self.deviceUrl).release()
         with QMutexLocker(self.doStopMutex):
             self.doStop = True
 
@@ -179,6 +196,7 @@ class ProcessingThread(QThread):
             self.imgProcFlags.erodeOn = imgProcFlags.erodeOn
             self.imgProcFlags.flipOn = imgProcFlags.flipOn
             self.imgProcFlags.cannyOn = imgProcFlags.cannyOn
+            self.imgProcFlags.yoloOn = imgProcFlags.yoloOn
 
     def updateImageProcessingSettings(self, imgProcSettings):
         with QMutexLocker(self.processingMutex):

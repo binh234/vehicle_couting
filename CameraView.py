@@ -304,5 +304,8 @@ class CameraView(QWidget, Ui_CameraView):
         elif action.text() == "Canny":
             self.imageProcessingFlags.cannyOn = action.isChecked()
             self.newImageProcessingFlags.emit(self.imageProcessingFlags)
+        elif action.text() == "Yolo":
+            self.imageProcessingFlags.yoloOn = action.isChecked()
+            self.newImageProcessingFlags.emit(self.imageProcessingFlags)
         elif action.text() == "Settings...":
             self.setImageProcessingSettings()
