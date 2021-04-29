@@ -3,7 +3,7 @@ import sys
 from PyQt5.QtWidgets import QApplication
 import qdarkstyle
 
-from MainWindow import MainWindow
+from core.MainWindow import MainWindow
 
 
 def main():
