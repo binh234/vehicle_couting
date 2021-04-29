@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
 import math
+from sort import Sort
+from helper import intersect, detect_class
 
 class VehicleCounting(object):
     END_POINT = 150
@@ -13,7 +15,7 @@ class VehicleCounting(object):
     YOLOV3_CFG = 'yolov3-tiny.cfg'
     YOLOV3_WEIGHT = 'yolov3-tiny.weights'
 
-    CONFIDENCE_SETTING = 0.5
+    CONFIDENCE_SETTING = 0.4
     YOLOV3_WIDTH = 416
     YOLOV3_HEIGHT = 416
 
@@ -27,6 +29,8 @@ class VehicleCounting(object):
         self.colors = np.random.uniform(0, 255, size=(len(self.CLASSES), 3))
         self.number_vehicle = 0
         self.list_object = []
+        self.memory = {}
+        self.tracker = Sort()
 
     def get_output_layers(self):
         """
@@ -52,8 +56,9 @@ class VehicleCounting(object):
         layer_output = self.net.forward(self.output_layers)
 
         boxes = []
-        class_ids = []
+        classes = []
         confidences = []
+        mid_points = []
 
         for out in layer_output:
             for detection in out:
@@ -69,9 +74,10 @@ class VehicleCounting(object):
                     x = center_x - w // 2
                     y = center_y - h // 2
                     boxes.append([x, y, w, h])
-                    class_ids.append(class_id)
+                    classes.append(self.CLASSES[class_id])
                     confidences.append(float(confidence))
-        return boxes, class_ids, confidences
+                    mid_points.append((center_x, center_y))
+        return boxes, classes, confidences, mid_points
     
     def draw_prediction(self, img, label, color, confidence, x, y, width, height):
         """
@@ -95,7 +101,7 @@ class VehicleCounting(object):
             cv2.putText(img, label + ": {:0.2f}%".format(confidence * 100), (x, y - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
         except (Exception, cv2.error) as e:
-            print("Can't draw prediction for class_id {}: {}".format(class_id, e))
+            print(e)
 
     def check_location(self, box_y, box_height, height):
         """
@@ -109,63 +115,58 @@ class VehicleCounting(object):
         return center_y > height - self.END_POINT
     
     def count_vehicles(self, frame):
+        """
+        Detect and track vehicles appear in the frame
+        :param frame: image
+        """
         height, width = frame.shape[:2]
-
-        # Tracking old object
-        tmp_list_object = self.list_object
-        self.list_object = []
-        for obj in tmp_list_object:
-            tracker = obj['tracker']
-            class_id = obj['id']
-            confidence = obj['confidence']
-            check, box = tracker.update(frame)
-            if check:
-                box_x, box_y, box_width, box_height = box
-                self.draw_prediction(frame, self.CLASSES[class_id], self.colors[class_id], confidence,
-                                box_x, box_y, box_width, box_height)
-                obj['tracker'] = tracker
-                obj['box'] = box
-                if self.check_location(box_y, box_height, height):
-                    # This object passed the end line
-                    self.number_vehicle += 1
-                else:
-                    self.list_object.append(obj)
+        line = [(0, height - self.END_POINT), (width, height - self.END_POINT)]
 
         # Detect object and check new object
-        boxes, class_ids, confidences = self.detect(frame)
-        for idx, box in enumerate(boxes):
-            box_x, box_y, box_width, box_height = box
-            if not self.check_location(box_y, box_height, height):
-                # This object doesn't pass the end line
-                box_center_x = box_x + box_width // 2
-                box_center_y = box_y + box_height // 2
-                check_new_object = True
-                for tracker in self.list_object:
-                    # Check existed object
-                    current_box_x, current_box_y, current_box_width, current_box_height = tracker['box']
-                    current_box_center_x = current_box_x + current_box_width // 2
-                    current_box_center_y = current_box_y + current_box_height // 2
-                    # Calculate distance between 2 object
-                    distance = math.sqrt((box_center_x - current_box_center_x) ** 2 +
-                                            (box_center_y - current_box_center_y) ** 2)
-                    if distance < self.MAX_DISTANCE:
-                        # Object is existed
-                        check_new_object = False
-                        break
-                if check_new_object:
-                    # Append new object to list
-                    new_tracker = cv2.TrackerKCF_create()
-                    new_tracker.init(frame, (box_x, box_y, box_width, box_height))
-                    new_object = {
-                        'id': class_ids[idx],
-                        'tracker': new_tracker,
-                        'confidence': confidences[idx],
-                        'box': box
-                    }
-                    self.list_object.append(new_object)
-                    # Draw new object
-                    self.draw_prediction(frame, self.CLASSES[new_object['id']], self.colors[new_object['id']], 
-                                    new_object['confidence'], box_x, box_y, box_width, box_height)
+        boxes, classes, confidences, mid_points = self.detect(frame)
+        indices = cv2.dnn.NMSBoxes(boxes, confidences, self.CONFIDENCE_SETTING, 0.31)
+
+        dets = []
+        for i in indices.flatten():
+            (x, y) = (boxes[i][0], boxes[i][1])
+            (w, h) = (boxes[i][2], boxes[i][3])
+            dets.append([x, y, x+w, y+h, confidences[i]])
+
+            # self.draw_prediction(frame, self.CLASSES[classes[i]], self.colors[classes[i]], 
+            #                         confidences[i], x, y, w, h)
+        
+        dets = np.asarray(dets)
+        tracks = self.tracker.update(dets)
+
+        boxes = []
+        indexIDs = []
+        previous = self.memory.copy()
+        memory = {}
+
+        for track in tracks:
+            boxes.append([track[0], track[1], track[2], track[3]])
+            indexIDs.append(int(track[4]))
+            self.memory[indexIDs[-1]] = boxes[-1]
+        
+        for i, box in enumerate(boxes):
+            # extract the bounding box coordinates
+            (x, y) = (int(box[0]), int(box[1]))
+            (w, h) = (int(box[2] - x), int(box[3] - y))
+            cur_center = (int(x + w/2), int(y + h/2))
+
+            color = self.colors[indexIDs[i] % len(self.colors)]
+            class_label, confidence = detect_class(cur_center, classes, confidences, mid_points)
+            self.draw_prediction(frame, class_label, color, confidence, x, y, w, h)
+
+            if indexIDs[i] in previous:
+                previous_box = previous[indexIDs[i]]
+                (x2, y2) = (int(previous_box[0]), int(previous_box[1]))
+                (w2, h2) = (int(previous_box[2]), int(previous_box[3]))
+                prev_center = (int(x2 + (w2 - x2)/2), int(y2 + (h2 - y2)/2))
+                cv2.line(frame, cur_center, prev_center, color, 3)
+
+                if intersect(cur_center, prev_center, line[0], line[1]):
+                    self.number_vehicle += 1
 
         # Put summary text
         cv2.putText(frame, "Number : {:03d}".format(self.number_vehicle), (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5,

@@ -2,3 +2,9 @@ opencv-python
 numpy
 PyQt5
 qdarkstyle
+sklearn
+numba
+scipy
+filterpy==1.4.5
+scikit-image==0.17.2
+lap==0.4.0
