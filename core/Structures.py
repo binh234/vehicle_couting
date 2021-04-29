@@ -15,6 +15,8 @@ class ImageProcessingSettings(object):
         self.cannyThreshold2 = float()
         self.cannyApertureSize = int()
         self.cannyL2gradient = bool()
+        self.detectConfidence = float()
+        self.detectNMSThreshold = float()
 
 
 class ImageProcessingFlags(object):
@@ -25,7 +27,7 @@ class ImageProcessingFlags(object):
         self.erodeOn = False
         self.flipOn = False
         self.cannyOn = False
-        self.yoloOn = False
+        self.detectOn = False
 
 
 class MouseData(object):

@@ -61,21 +61,10 @@ class ProcessingThread(QThread):
                 # Get frame from queue, store in currentFrame, set ROI
                 # self.currentFrame = Mat(self.sharedImageBuffer.getByDeviceUrl(self.deviceUrl).get().clone(),
                 #                         self.currentROI)
-                # print(type(self.sharedImageBuffer.getByDeviceUrl(self.deviceUrl)))
                 self.currentFrame = self.sharedImageBuffer.getByDeviceUrl(self.deviceUrl).get()
 
-                if self.currentFrame is not None:
-                    # Yolo detection:
-                    if self.imgProcFlags.yoloOn:
-                        self.currentFrame = self.vehicleCounting.count_vehicles(self.currentFrame)
-                        # self.currentFrame = cv2.line(self.currentFrame, (0, 300), (400, 300), (255, 0, 0), 2)
-                    
-                    self.currentFrame = self.currentFrame[
-                                    self.currentROI.y():(self.currentROI.y() + self.currentROI.height()),
-                                    self.currentROI.x():(self.currentROI.x() + self.currentROI.width())].copy()
-                else:
+                if self.currentFrame is None:
                     continue
-
 
                 # Example of how to grab a frame from another stream (where Device Url=1)
                 # Note: This requires stream synchronization to be ENABLED (in the Options menu of MainWindow)
@@ -89,6 +78,21 @@ class ProcessingThread(QThread):
                 ##################################
                 # PERFORM IMAGE PROCESSING BELOW #
                 ##################################
+                                                  
+                # Flip
+                if self.imgProcFlags.flipOn:
+                    self.currentFrame = cv2.flip(self.currentFrame, self.imgProcSettings.flipCode)
+
+                # Yolo detection:
+                if self.imgProcFlags.detectOn:
+                    self.currentFrame = self.vehicleCounting.count_vehicles(self.currentFrame,
+                                                                            self.imgProcSettings.detectConfidence,
+                                                                            self.imgProcSettings.detectNMSThreshold
+                                                                            )
+                
+                self.currentFrame = self.currentFrame[
+                                self.currentROI.y():(self.currentROI.y() + self.currentROI.height()),
+                                self.currentROI.x():(self.currentROI.x() + self.currentROI.width())].copy()
 
                 # Grayscale conversion (in-place operation)
                 if self.imgProcFlags.grayscaleOn and (
@@ -117,13 +121,11 @@ class ProcessingThread(QThread):
                 if self.imgProcFlags.dilateOn:
                     self.currentFrame = cv2.dilate(self.currentFrame, self.kernel,
                                                    iterations=self.imgProcSettings.dilateNumberOfIterations)
+
                 # Erode
                 if self.imgProcFlags.erodeOn:
                     self.currentFrame = cv2.erode(self.currentFrame, self.kernel,
                                                   iterations=self.imgProcSettings.erodeUrlOfIterations)
-                # Flip
-                if self.imgProcFlags.flipOn:
-                    self.currentFrame = cv2.flip(self.currentFrame, self.imgProcSettings.flipCode)
 
                 # Canny edge detection
                 if self.imgProcFlags.cannyOn:
@@ -142,7 +144,6 @@ class ProcessingThread(QThread):
 
                 # Inform GUI thread of new frame (QImage)
                 self.newFrame.emit(self.frame)
-                # self.sharedImageBuffer.getByDeviceUrl(self.deviceUrl).queue.task_done()
 
             # Update statistics
             self.updateFPS(self.processingTime)
@@ -196,7 +197,7 @@ class ProcessingThread(QThread):
             self.imgProcFlags.erodeOn = imgProcFlags.erodeOn
             self.imgProcFlags.flipOn = imgProcFlags.flipOn
             self.imgProcFlags.cannyOn = imgProcFlags.cannyOn
-            self.imgProcFlags.yoloOn = imgProcFlags.yoloOn
+            self.imgProcFlags.detectOn = imgProcFlags.detectOn
 
     def updateImageProcessingSettings(self, imgProcSettings):
         with QMutexLocker(self.processingMutex):
@@ -212,6 +213,8 @@ class ProcessingThread(QThread):
             self.imgProcSettings.cannyThreshold2 = imgProcSettings.cannyThreshold2
             self.imgProcSettings.cannyApertureSize = imgProcSettings.cannyApertureSize
             self.imgProcSettings.cannyL2gradient = imgProcSettings.cannyL2gradient
+            self.imgProcSettings.detectConfidence = imgProcSettings.detectConfidence
+            self.imgProcSettings.detectNMSThreshold = imgProcSettings.detectNMSThreshold
 
     def setROI(self, roi):
         with QMutexLocker(self.processingMutex):

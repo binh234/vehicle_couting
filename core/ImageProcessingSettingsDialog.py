@@ -23,6 +23,7 @@ class ImageProcessingSettingsDialog(QDialog, Ui_ImageProcessingSettingsDialog):
         self.resetErodeToDefaultsButton.released.connect(self.resetErodeDialogToDefaults)
         self.resetFlipToDefaultsButton.released.connect(self.resetFlipDialogToDefaults)
         self.resetCannyToDefaultsButton.released.connect(self.resetCannyDialogToDefaults)
+        self.resetDetectToDefaultsButton.released.connect(self.resetDetectDialogToDefaults)
         self.applyButton.released.connect(self.updateStoredSettingsFromDialog)
         self.smoothTypeGroup.buttonReleased.connect(self.smoothTypeChange)
 
@@ -46,6 +47,15 @@ class ImageProcessingSettingsDialog(QDialog, Ui_ImageProcessingSettingsDialog):
         rx9 = QRegExp("[3,5,7]")  # Integers 3, 5, 7
         validator9 = QRegExpValidator(rx9)
         self.cannyApertureSizeEdit.setValidator(validator9)
+        # detectConfidenceEdit input string validation
+        rx10 = QRegExp("^0\.\d+$") # Float 0.0 to 1.0 
+        validator10 = QRegExpValidator(rx10)
+        self.detectConfidenceEdit.setValidator(validator10)
+        # detectNMSThreshEdit input string validation
+        rx11 = QRegExp("^0\.\d+$") # Float 0.0 to 1.0 
+        validator11 = QRegExpValidator(rx10)
+        self.detectNMSThreshEdit.setValidator(validator11)
+
         # Set dialog values to defaults
         self.resetAllDialogToDefaults()
         # Update image processing settings in imageProcessingSettings structure and processingThread
@@ -81,6 +91,9 @@ class ImageProcessingSettingsDialog(QDialog, Ui_ImageProcessingSettingsDialog):
         self.imageProcessingSettings.cannyThreshold2 = float(self.cannyThresh2Edit.text())
         self.imageProcessingSettings.cannyApertureSize = int(self.cannyApertureSizeEdit.text())
         self.imageProcessingSettings.cannyL2gradient = self.cannyL2NormCheckBox.isChecked()
+        # Detect
+        self.imageProcessingSettings.detectConfidence = float(self.detectConfidenceEdit.text())
+        self.imageProcessingSettings.detectNMSThreshold = float(self.detectNMSThreshEdit.text())
         # Update image processing flags in processingThread
         self.newImageProcessingSettings.emit(self.imageProcessingSettings)
 
@@ -112,6 +125,9 @@ class ImageProcessingSettingsDialog(QDialog, Ui_ImageProcessingSettingsDialog):
         self.cannyThresh2Edit.setText(str(self.imageProcessingSettings.cannyThreshold2))
         self.cannyApertureSizeEdit.setText(str(self.imageProcessingSettings.cannyApertureSize))
         self.cannyL2NormCheckBox.setChecked(self.imageProcessingSettings.cannyL2gradient)
+        # Detect
+        self.detectConfidenceEdit.setText(str(self.imageProcessingSettings.detectConfidence))
+        self.detectNMSThreshEdit.setText(str(self.imageProcessingSettings.detectNMSThreshold))
         #  Enable/disable appropriate Smooth parameter inputs
         self.smoothTypeChange(self.smoothTypeGroup.checkedButton())
 
@@ -126,6 +142,8 @@ class ImageProcessingSettingsDialog(QDialog, Ui_ImageProcessingSettingsDialog):
         self.resetFlipDialogToDefaults()
         # Canny
         self.resetCannyDialogToDefaults()
+        # Detect
+        self.resetDetectDialogToDefaults()
 
     def smoothTypeChange(self, input):
         if input == self.smoothBlurButton:
@@ -220,6 +238,7 @@ class ImageProcessingSettingsDialog(QDialog, Ui_ImageProcessingSettingsDialog):
                                     "Smooth parameter 2 must be an ODD number (or zero).\n\n"
                                     "Automatically set to (inputted value+1).")
         # Check for empty inputs: if empty, set to default values
+        # Smooth
         if self.smoothParam1Edit.text().strip() == '':
             self.smoothParam1Edit.setText(str(DEFAULT_SMOOTH_PARAM_1))
             inputEmpty = True
@@ -232,12 +251,15 @@ class ImageProcessingSettingsDialog(QDialog, Ui_ImageProcessingSettingsDialog):
         if self.smoothParam4Edit.text().strip() == '':
             self.smoothParam4Edit.setText(str(DEFAULT_SMOOTH_PARAM_4))
             inputEmpty = True
+        # Dilate
         if self.dilateIterationsEdit.text().strip() == '':
             self.dilateIterationsEdit.setText(str(DEFAULT_DILATE_ITERATIONS))
             inputEmpty = True
+        # Erode
         if self.erodeIterationsEdit.text().strip() == '':
             self.erodeIterationsEdit.setText(str(DEFAULT_ERODE_ITERATIONS))
             inputEmpty = True
+        # Canny
         if self.cannyThresh1Edit.text().strip() == '':
             self.cannyThresh1Edit.setText(str(DEFAULT_CANNY_THRESHOLD_1))
             inputEmpty = True
@@ -247,6 +269,14 @@ class ImageProcessingSettingsDialog(QDialog, Ui_ImageProcessingSettingsDialog):
         if self.cannyApertureSizeEdit.text().strip() == '':
             self.cannyApertureSizeEdit.setText(str(DEFAULT_CANNY_APERTURE_SIZE))
             inputEmpty = True
+        # Detect
+        if self.detectConfidenceEdit.text().strip() == '':
+            self.detectConfidenceEdit.setText(str(DEFAULT_DETECT_CONFIDENCE))
+            inputEmpty = True
+        if self.detectNMSThreshEdit.text().strip() == '':
+            self.detectNMSThreshEdit.setText(str(DEFAULT_DETECT_NMS_THRESHOLD))
+            inputEmpty = True
+
         # Check if any of the inputs were empty
         if inputEmpty:
             QMessageBox.warning(self.parentWidget(),
@@ -317,3 +347,7 @@ class ImageProcessingSettingsDialog(QDialog, Ui_ImageProcessingSettingsDialog):
         self.cannyThresh2Edit.setText(str(DEFAULT_CANNY_THRESHOLD_2))
         self.cannyApertureSizeEdit.setText(str(DEFAULT_CANNY_APERTURE_SIZE))
         self.cannyL2NormCheckBox.setChecked(DEFAULT_CANNY_L2GRADIENT)
+
+    def resetDetectDialogToDefaults(self):
+        self.detectConfidenceEdit.setText(str(DEFAULT_DETECT_CONFIDENCE))
+        self.detectNMSThreshEdit.setText(str(DEFAULT_DETECT_NMS_THRESHOLD))

@@ -51,4 +51,20 @@ DEFAULT_CANNY_THRESHOLD_1 = 10
 DEFAULT_CANNY_THRESHOLD_2 = 00
 DEFAULT_CANNY_APERTURE_SIZE = 3
 DEFAULT_CANNY_L2GRADIENT = False
-# Yolo
+# Detect
+DEFAULT_DETECT_CONFIDENCE = 0.3
+DEFAULT_DETECT_NMS_THRESHOLD = 0.3
+
+# Yolo settings
+END_POINT = 150 
+CLASSES = open('core/coco.names').read().strip().split('\n')
+        
+# Define vehicle class
+VEHICLE_CLASSES = [1, 2, 3, 5, 6, 7]
+
+# get it at https://pjreddie.com/darknet/yolo/
+YOLOV3_CFG = 'cfg/yolov3-tiny.cfg'
+YOLOV3_WEIGHT = 'cfg/yolov3-tiny.weights'
+
+YOLOV3_WIDTH = 416
+YOLOV3_HEIGHT = 416

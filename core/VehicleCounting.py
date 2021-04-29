@@ -4,30 +4,16 @@ import math, os
 
 from .sort import Sort
 from .helper import intersect, detect_class
+from .Config import END_POINT, CLASSES, VEHICLE_CLASSES, YOLOV3_CFG, YOLOV3_WEIGHT, YOLOV3_WIDTH, YOLOV3_HEIGHT
 
 class VehicleCounting(object):
-    END_POINT = 150
-    CLASSES = open('core/coco.names').read().strip().split('\n')
-            
-    # Define vehicle class
-    VEHICLE_CLASSES = [1, 2, 3, 5, 6, 7]
-
-    # get it at https://pjreddie.com/darknet/yolo/
-    YOLOV3_CFG = 'cfg/yolov3-tiny.cfg'
-    YOLOV3_WEIGHT = 'cfg/yolov3-tiny.weights'
-
-    CONFIDENCE_SETTING = 0.4
-    YOLOV3_WIDTH = 416
-    YOLOV3_HEIGHT = 416
-
-    MAX_DISTANCE = 80
 
     def __init__(self):
-        self.net = cv2.dnn.readNetFromDarknet(self.YOLOV3_CFG, self.YOLOV3_WEIGHT)
+        self.net = cv2.dnn.readNetFromDarknet(YOLOV3_CFG, YOLOV3_WEIGHT)
         self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
         self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
         self.output_layers = self.get_output_layers()
-        self.colors = np.random.uniform(0, 255, size=(len(self.CLASSES), 3))
+        self.colors = np.random.uniform(0, 255, size=(len(CLASSES), 3))
         self.number_vehicle = 0
         self.list_object = []
         self.memory = {}
@@ -36,20 +22,18 @@ class VehicleCounting(object):
     def get_output_layers(self):
         """
         Get output layers of darknet
-        :param net: Model
-        :return: output_layers
         """
         layer_names = self.net.getLayerNames()
         output_layers = [layer_names[i[0] - 1] for i in self.net.getUnconnectedOutLayers()]
         return output_layers
     
-    def detect(self, frame):
+    def detect(self, frame, confidence_thresh):
         """
         Detect object use yolo3 model
         :param frame: image
         :return:
         """
-        yolo_w, yolo_h = self.YOLOV3_WIDTH, self.YOLOV3_HEIGHT
+        yolo_w, yolo_h = YOLOV3_WIDTH, YOLOV3_HEIGHT
         height, width = frame.shape[:2]
         img = cv2.resize(frame, (yolo_w, yolo_h))
         blob = cv2.dnn.blobFromImage(img, 0.00392, (yolo_w, yolo_h), swapRB=True, crop=False)
@@ -66,7 +50,7 @@ class VehicleCounting(object):
                 scores = detection[5:]
                 class_id = np.argmax(scores)
                 confidence = scores[class_id]
-                if confidence > self.CONFIDENCE_SETTING and class_id in self.VEHICLE_CLASSES:
+                if confidence > confidence_thresh and class_id in VEHICLE_CLASSES:
                     # print("Object name: " + classes[class_id] + " - Confidence: {:0.2f}".format(confidence * 100))
                     center_x = int(detection[0] * width)
                     center_y = int(detection[1] * height)
@@ -75,7 +59,7 @@ class VehicleCounting(object):
                     x = center_x - w // 2
                     y = center_y - h // 2
                     boxes.append([x, y, w, h])
-                    classes.append(self.CLASSES[class_id])
+                    classes.append(CLASSES[class_id])
                     confidences.append(float(confidence))
                     mid_points.append((center_x, center_y))
         return boxes, classes, confidences, mid_points
@@ -103,38 +87,25 @@ class VehicleCounting(object):
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
         except (Exception, cv2.error) as e:
             print(e)
-
-    def check_location(self, box_y, box_height, height):
-        """
-        Check center point of object that passing end line or not
-        :param box_y: y value of bounding box
-        :param box_height: height of bounding box
-        :param height: height of image
-        :return: Boolean
-        """
-        center_y = box_y + box_height // 2
-        return center_y > height - self.END_POINT
     
-    def count_vehicles(self, frame):
+    def count_vehicles(self, frame, confidence_thresh, nms_thresh):
         """
         Detect and track vehicles appear in the frame
         :param frame: image
         """
         height, width = frame.shape[:2]
-        line = [(0, height - self.END_POINT), (width, height - self.END_POINT)]
+        line = [(0, height - END_POINT), (width, height - END_POINT)]
 
-        # Detect object and check new object
-        boxes, classes, confidences, mid_points = self.detect(frame)
-        indices = cv2.dnn.NMSBoxes(boxes, confidences, self.CONFIDENCE_SETTING, 0.31)
+        # Detect objects
+        boxes, classes, confidences, mid_points = self.detect(frame, confidence_thresh)
+        indices = cv2.dnn.NMSBoxes(boxes, confidences, confidence_thresh, nms_thresh)
 
         dets = []
-        for i in indices.flatten():
-            (x, y) = (boxes[i][0], boxes[i][1])
-            (w, h) = (boxes[i][2], boxes[i][3])
-            dets.append([x, y, x+w, y+h, confidences[i]])
-
-            # self.draw_prediction(frame, self.CLASSES[classes[i]], self.colors[classes[i]], 
-            #                         confidences[i], x, y, w, h)
+        if len(indices) > 0:
+            for i in indices.flatten():
+                (x, y) = (boxes[i][0], boxes[i][1])
+                (w, h) = (boxes[i][2], boxes[i][3])
+                dets.append([x, y, x+w, y+h, confidences[i]])
         
         dets = np.asarray(dets)
         tracks = self.tracker.update(dets)
@@ -173,5 +144,5 @@ class VehicleCounting(object):
         cv2.putText(frame, "Number : {:03d}".format(self.number_vehicle), (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                     (0, 0, 255), 2)
         # Draw end line
-        cv2.line(frame, (0, height - self.END_POINT), (width, height - self.END_POINT), (255, 0, 0), 2)
+        cv2.line(frame, line[0], line[1], (255, 0, 0), 2)
         return frame
