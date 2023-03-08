@@ -5,7 +5,7 @@ An application with a user-friendly interface, easy-to-use using OpenCV, YoloV3 
 
 ## Clone project
 ```git
-git clone https://github.com/binh234/vevhicle_counting.git
+git clone https://github.com/binh234/vevhicle_couting.git
 ```
 
 ## Dependencies
