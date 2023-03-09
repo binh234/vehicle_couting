@@ -1,7 +1,10 @@
 # Vehicles Counting
 An application with a user-friendly interface, easy-to-use using OpenCV, YoloV3 to detect and count the number of vehicles passed through a line in the video, live cam, or stream. This app runs in multi-threading for different videos and streams.
 
-*Note*: You should have a GPU with [NVIDIA driver](https://www.nvidia.co.uk/Download/index.aspx?lang=en-uk), [CUDA toolkits](https://developer.nvidia.com/cuda-toolkit) and [CuDNN](https://developer.nvidia.com/rdp/cudnn-download) to run faster with YoloV3
+**Note**: You should have a GPU with [NVIDIA driver](https://www.nvidia.co.uk/Download/index.aspx?lang=en-uk), [CUDA toolkits](https://developer.nvidia.com/cuda-toolkit) and [CuDNN](https://developer.nvidia.com/rdp/cudnn-download) to run faster with YoloV3
+
+![connect](demo/connect.png)
+![demo](demo/demo.png)
 
 ## Clone project
 ```git
